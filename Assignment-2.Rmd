@@ -1,0 +1,164 @@
+---
+title: "Assignment 2"
+author: "Qingyuan Pei"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+
+## Code Section 1
+
+
+Load all the packages that will be used in this assignment.
+
+```{r loading_packages, message=FALSE, warning=FALSE, paged.print=FALSE}
+library(rentrez)
+library(seqinr)
+library(Biostrings)
+library(tidyverse)
+library(rgbif)
+library(CoordinateCleaner)
+library(sf)
+```
+
+
+Search for COI sequences from genus *Streptopelia* (sea eagle) and check the hits.
+
+```{r Search}
+COI_search <- entrez_search(
+  db = "nuccore", 
+  term = "Streptopelia[ORGN] AND COI[Gene] AND 200:1000[SLEN]", 
+  retmax = 200
+  )
+COI_search
+```
+
+
+Use entrez_fetch to download sequence data of in FASTA format and then write to a file in the current directory.
+
+```{r}
+COI_fetch <- entrez_fetch(
+  db = "nuccore", 
+  id = COI_search$ids, 
+  rettype = "fasta"
+  )
+write(COI_fetch, "COI_fetch.fasta", sep = "\n")
+```
+
+
+Read the FASTA file back to the environment and create a dataframe to save the names and sequences.
+
+```{r}
+stringSet <- readDNAStringSet("COI_fetch.fasta")
+dfCOI <- data.frame(COI_Title = names(stringSet), 
+                    COI_Sequence = paste(stringSet))
+
+dfCOI$Species_Name <- word(dfCOI$COI_Title, 2L, 3L)
+```
+
+
+Change the column orders and filter out the species that are not verified.
+
+```{r}
+dfCOI_filtered <- dfCOI[, c("COI_Title", "Species_Name", "COI_Sequence")] %>%
+  filter(!grepl('UNVERIFIED_ORG', COI_Title))
+```
+
+
+Use rgbif package functions to download occurance data of Streptopelia and write it into the environment.
+
+```{r}
+#save usage Key to a vector
+usagekey <- name_backbone("Streptopelia")$usageKey
+
+#download the filtered data
+GBIFdownload <- occ_download(  
+  pred("hasGeospatialIssue", FALSE),
+  pred("hasCoordinate", TRUE),
+  pred("occurrenceStatus","PRESENT"), 
+  pred_not(pred_in("basisOfRecord",c("FOSSIL_SPECIMEN","LIVING_SPECIMEN"))),
+  pred("taxonKey", usagekey),
+  format = "SIMPLE_CSV"
+  )
+
+#see the downloading process status
+occ_download_wait(GBIFdownload)
+
+#import the downloaded data into the environment
+Streptopelia_ocurrence <- occ_download_get('0020477-231002084531237') %>%
+  occ_download_import()
+```
+
+
+To filter out columns that are not needed and all the missing data.
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+#to check the names of all the columns in Streptopelia_ocurrence
+column_names <- names(Streptopelia_ocurrence)
+
+#choose and retain the columns that are needed
+dfGBIF_filtered <- Streptopelia_ocurrence %>%
+  dplyr:::select.data.frame(species, countryCode, 
+                            decimalLatitude, decimalLongitude) %>%
+  group_by(species) %>%
+  filter(!is.na(countryCode)) %>%
+  filter(!is.na(decimalLatitude)) %>%
+  filter(!is.na(decimalLongitude))
+
+#find the common species shared by dfCOI_filtered and dfGBIF_filtered
+dfCOI_unique_species <- unique(dfCOI_filtered$Species_Name)
+dfGBIF_unique_species <- unique(dfGBIF_filtered$species)
+common_species <- intersect(dfCOI_unique_species, dfGBIF_unique_species)
+
+#subset dfGBIF_filtered with species only exist in the common_species
+dfGBIF_subset <- subset(dfGBIF_filtered, species %in% common_species)
+```
+
+
+```{r, message=FALSE, warning=FALSE, paged.print=FALSE}
+dfBOLD <- read_tsv(file = "http://www.boldsystems.org/index.php/API_Public/combined?taxon=Haliaeetus&format=tsv")
+
+dfBOLD_filtered <- dfBOLD %>%
+  select(species_name, lat, lon, country) %>%
+  group_by(species_name) %>%
+  filter(!is.na(country)) %>%
+  filter(!is.na(lat)) %>%
+  filter(!is.na(lon))
+  
+```
+
+
+## Code Section 2
+
+
+
+```{r pressure, echo=FALSE}
+
+```
+
+
+
+```{r}
+
+```
+
+
+## Results and Discussion
+
+
+## Acknowledgements
+
+
+## References
+
+sbha 2018 *Stackoverflow* https://stackoverflow.com/questions/22249702/delete-rows-containing-specific-strings-in-r
+
+bnaul 2012 *Stackoverflow* https://stackoverflow.com/questions/3695677/how-to-find-common-elements-from-multiple-vectors
+
+csgillespie 2012 *Stackoverflow* https://stackoverflow.com/questions/9350025/filtering-a-data-frame-on-a-vector
