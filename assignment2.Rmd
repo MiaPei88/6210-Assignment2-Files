@@ -61,7 +61,7 @@ write(NCBI_fetch, "NCBI_fetch.fasta", sep = "\n")
 
 Read the FASTA file back to the environment and create a dataframe to save the names and sequences.
 
-```{r Tidy_COI}
+```{r Tidy_COI, eval=FALSE}
 stringSet <- readDNAStringSet("NCBI_fetch.fasta")
 dfNCBI_COI <- data.frame(COI_Title = names(stringSet), 
                     COI_Sequence = paste(stringSet))
@@ -71,7 +71,7 @@ dfNCBI_COI$Species_Name <- word(dfNCBI_COI$COI_Title, 2L, 3L)
 
 Draw a histogram of the distribution of COI sequence lengths, to see what sequences should be deleted.
 
-```{r COI_histogram}
+```{r COI_histogram, }
 dfNCBI_COI$Sequence_Length <- nchar(dfNCBI_COI$COI_Sequence)
 
 hist((dfNCBI_COI$Sequence_Length), 
