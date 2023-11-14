@@ -17,7 +17,27 @@ The genus *Streptopelia* is widely spread all around the globe and is also an im
  
 ## Code Section 1
 
-Packages that will be used in this project.
+#Packages that will be used in this project.
+## I suggest to put all packages installment as well in case someone doesn't have them!
+```{r Installations, echo=TRUE, results='hide'}
+# Your R code goes here
+
+install.packages("rentrez")
+install.packages("seqinr")
+install.packages("Biostrings")
+install.packages("tidyverse")
+install.packages("rgbif")
+install.packages("stringi")
+install.packages("ape")
+install.packages("RSQLite")
+install.packages("muscle")
+install.packages("DECIPHER")
+install.packages("dendextend")
+install.packages("ggplot2")
+install.packages("ggtree")
+install.packages("mapdata")
+install.packages("phytools")
+```
 
 ```{r loading_packages, message=FALSE, warning=FALSE, paged.print=FALSE}
 library(rentrez)
@@ -109,14 +129,28 @@ To add a Biostrings column using all the sequences in column COI_Sequence of dfC
 dfCOI_filtered1 <- as.data.frame(dfCOI_filtered)
 
 dfCOI_filtered1$nucleotides <- DNAStringSet(dfCOI_filtered1$COI_Sequence)
-
-dfCOI_filtered1$Alignment_id <- paste(word(dfCOI_filtered1$COI_Title, 1L), 
-                                      word(dfCOI_filtered1$Species_Name, 2L), 
-                                      sep = " ")
+## As it was hard to see the labels on phylogeny tree so I change the labels to be just ID 
+dfCOI_filtered1$Alignment_id <- paste(word(dfCOI_filtered1$COI_Title, 1L), sep = " ")
 names(dfCOI_filtered1$nucleotides) <- dfCOI_filtered1$Alignment_id
 
 dfCOI.alignment.test <- DNAStringSet(muscle::muscle(dfCOI_filtered1$nucleotides, 
                                                maxiters = 2), use.names = TRUE)
+## it is better to visualize the alignment to evaluate its quality 
+BrowseSeqs(dfCOI.alignment.test)
+```
+
+```{r eval=FALSE, warning=FALSE, include=FALSE, results='hide'}
+dfCOI_filtered1 <- as.data.frame(dfCOI_filtered)
+
+dfCOI_filtered1$nucleotides <- DNAStringSet(dfCOI_filtered1$COI_Sequence)
+
+dfCOI_filtered1$Alignment_id <- paste(word(dfCOI_filtered1$COI_Title, 1L), sep = " ")
+names(dfCOI_filtered1$nucleotides) <- dfCOI_filtered1$Alignment_id
+
+dfCOI.alignment.test <- DNAStringSet(muscle::muscle(dfCOI_filtered1$nucleotides, 
+                                               maxiters = 2), use.names = TRUE)
+## it is better to visualize the alignment to evaluate its quality 
+BrowseSeqs(dfCOI.alignment.test)
 ```
 
 To cluster the aligned sequences see if there are any outliers or abnormal sequences.
@@ -160,7 +194,10 @@ Use rgbif package functions to download occurance data of Streptopelia and write
 ```{r GBIF_download, results='hide', message=FALSE, warning=FALSE, paged.print=FALSE}
 #save usage Key to a vector
 usagekey <- name_backbone("Streptopelia")$usageKey
-
+## as you didn't include your authentication part for GBIF I add this part as well
+options(gbif_user = "aamanatc")
+options(gbif_pwd = "Ali1124138334")
+options(gbif_email = "alireza.amanatchi95@gmail.com")
 #download the filtered data
 GBIFdownload <- occ_download(  
   pred("hasGeospatialIssue", FALSE),
