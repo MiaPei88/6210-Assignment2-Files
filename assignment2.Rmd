@@ -21,22 +21,11 @@ The genus *Streptopelia* is widely spread all around the globe and is also an im
 ## I suggest to put all packages installment as well in case someone doesn't have them!
 ```{r Installations, echo=TRUE, results='hide'}
 # Your R code goes here
-
-install.packages("rentrez")
-install.packages("seqinr")
-install.packages("Biostrings")
-install.packages("tidyverse")
-install.packages("rgbif")
-install.packages("stringi")
-install.packages("ape")
-install.packages("RSQLite")
-install.packages("muscle")
-install.packages("DECIPHER")
-install.packages("dendextend")
-install.packages("ggplot2")
-install.packages("ggtree")
-install.packages("mapdata")
-install.packages("phytools")
+#including install.packages and narrowing down the script length
+if (!requireNamespace("BiocManager", quietly = TRUE))
+install.packages("BiocManager")
+BiocManager::install(c("Biostrings", "DECIPHER", "phytools"))
+install.packages(c("rentrez", "seqinr", "tidyverse", "rgbif", "stringi", "ape", "RSQLite", "muscle", "dendextend", "ggplot2", "ggtree", "mapdata"))
 ```
 
 ```{r loading_packages, message=FALSE, warning=FALSE, paged.print=FALSE}
@@ -58,6 +47,7 @@ library(phytools)
 ```
 
 Search for COI sequences from genus *Streptopelia* and check the hits.
+## you can add a reason for puting specific number in retmax. for instance you wanted to retrieve 200 results as you wont need more in this project
 
 ```{r Search, results='hide'}
 NCBI_search <- entrez_search(
@@ -102,25 +92,29 @@ hist((dfNCBI_COI$Sequence_Length),
 
 Filter out the species with much shorter sequence lengths than all the majority and those with less than 3 samples.
 
-```{r}
-dfCOI_species_count <- dfNCBI_COI %>%
-  group_by(Species_Name) %>%
-  count() 
+## now I rewrite your codes related to filterin steps by using function command 
+```{r, Filterin by using function }
+library(dplyr)
+library(stringr)
 
-dfCOI_filtered <- dfNCBI_COI %>%
-  mutate(COI_Sequence = str_remove_all(COI_Sequence, "^N+|N+$|-")) %>%
-  #remove the unverified sequences
-  filter(!grepl('UNVERIFIED_ORG', COI_Title)) %>%
-  #remove sequences with length shorter or longer than the median length -/+50
-  filter(str_count(COI_Sequence) >= median(str_count(COI_Sequence)) - 50 & 
-           str_count(COI_Sequence) <= median(str_count(COI_Sequence)) + 50) %>%
-  #remove all sequences with the proportion of N is bigger than 1%
-  filter(str_count(COI_Sequence, "N") <= (0.01 * str_count(COI_Sequence))) %>%
-  #remove species with less than 3 sequences
-  group_by(Species_Name) %>%
-  filter(n() >= 3) %>%
-  arrange(Species_Name) %>%
-  select(-Sequence_Length)
+processCOIData <- function(dfNCBI_COI) {
+  dfCOI_filtered <- dfNCBI_COI %>%
+    mutate(COI_Sequence = str_remove_all(COI_Sequence, "^N+|N+$|-")) %>%
+    filter(!grepl('UNVERIFIED_ORG', COI_Title)) %>%
+    filter(str_count(COI_Sequence) >= median(str_count(COI_Sequence)) - 50 & 
+             str_count(COI_Sequence) <= median(str_count(COI_Sequence)) + 50) %>%
+    filter(str_count(COI_Sequence, "N") <= (0.01 * str_count(COI_Sequence))) %>%
+    group_by(Species_Name) %>%
+    filter(n() >= 3) %>%
+    arrange(Species_Name) %>%
+    select(-Sequence_Length)
+
+  return(dfCOI_filtered)
+}
+
+# Assuming dfNCBI_COI is your data frame
+dfCOI_filtered <- processCOIData(dfNCBI_COI)
+
 ```
 
 To add a Biostrings column using all the sequences in column COI_Sequence of dfCOI_filtered and a column for naming the nucleotides for better visualization of sequence alignment.
@@ -139,19 +133,7 @@ dfCOI.alignment.test <- DNAStringSet(muscle::muscle(dfCOI_filtered1$nucleotides,
 BrowseSeqs(dfCOI.alignment.test)
 ```
 
-```{r eval=FALSE, warning=FALSE, include=FALSE, results='hide'}
-dfCOI_filtered1 <- as.data.frame(dfCOI_filtered)
 
-dfCOI_filtered1$nucleotides <- DNAStringSet(dfCOI_filtered1$COI_Sequence)
-
-dfCOI_filtered1$Alignment_id <- paste(word(dfCOI_filtered1$COI_Title, 1L), sep = " ")
-names(dfCOI_filtered1$nucleotides) <- dfCOI_filtered1$Alignment_id
-
-dfCOI.alignment.test <- DNAStringSet(muscle::muscle(dfCOI_filtered1$nucleotides, 
-                                               maxiters = 2), use.names = TRUE)
-## it is better to visualize the alignment to evaluate its quality 
-BrowseSeqs(dfCOI.alignment.test)
-```
 
 To cluster the aligned sequences see if there are any outliers or abnormal sequences.
 
@@ -218,26 +200,31 @@ Streptopelia_ocurrence <- occ_download_get('0028663-231002084531237') %>%
   occ_download_import()
 ```
 
-To filter out columns that are not needed and all the missing data.
+To filter out columns that are not needed and all the missing data. 
+## I also did some changes in filtering steps by using function command again 
 
 ```{r GBIF_filter, results='hide'}
-#to check the names of all the columns in Streptopelia_ocurrence
-names(Streptopelia_ocurrence)
 
-#choose and retain the columns that are needed
-dfGBIF_filtered <- Streptopelia_ocurrence %>%
-  dplyr:::select.data.frame(species, decimalLatitude, decimalLongitude) %>%
-  group_by(species) %>%
-  filter(!is.na(decimalLatitude)) %>%
-  filter(!is.na(decimalLongitude))
+filterGBIFData <- function(ocurrence_data, COI_filtered_data) {
+  dfGBIF_filtered <- ocurrence_data %>%
+    select(species, decimalLatitude, decimalLongitude) %>%
+    group_by(species) %>%
+    filter(!is.na(decimalLatitude)) %>%
+    filter(!is.na(decimalLongitude))
 
-#find the common species shared by dfCOI_filtered and dfGBIF_filtered
-dfCOI_unique_species <- unique(dfCOI_filtered$Species_Name)
-dfGBIF_unique_species <- unique(dfGBIF_filtered$species)
-common_species <- intersect(dfCOI_unique_species, dfGBIF_unique_species)
+  dfCOI_unique_species <- unique(COI_filtered_data$Species_Name)
+  dfGBIF_unique_species <- unique(dfGBIF_filtered$species)
+  common_species <- intersect(dfCOI_unique_species, dfGBIF_unique_species)
 
-#subset dfGBIF_filtered with species only exist in the common_species
-dfGBIF_subset <- subset(dfGBIF_filtered, species %in% common_species)
+  dfGBIF_subset <- subset(dfGBIF_filtered, species %in% common_species)
+
+  return(dfGBIF_subset)
+}
+
+# Assuming Streptopelia_ocurrence is your data frame and dfCOI_filtered is already defined
+dfGBIF_subset <- filterGBIFData(Streptopelia_ocurrence, dfCOI_filtered)
+
+
 ```
 
 
@@ -259,6 +246,8 @@ names(dfCOI_filtered3$nucleotides) <- dfCOI_filtered3$Alignment_id
 
 dfCOI.alignment <- DNAStringSet(muscle::muscle(dfCOI_filtered3$nucleotides, 
                                                maxiters = 2), use.names = TRUE)
+## it is better to see the alignment to make better decision  
+BrowseSeqs(dfCOI.alignment)
 ```
 
 Create a dendrogram using package DECIPHER only with the species names for the next step to highlight the tree by different species names.
@@ -276,6 +265,8 @@ clusters.COI <- DECIPHER::TreeLine(myDistMatrix = distanceMatrix,
                                    collapse = -1,
                                    type = "both",
                                    verbose = TRUE)
+
+
 ```
 
 Use the package dendextend to convert the dendrogram into phylo and then use package tidytree to get the information of each nodes as a tibble. Highlight each clades with different colors to represent different species using the nodes' number.
@@ -325,20 +316,28 @@ ggtree(COI_tree) +
 ```
 
 Find one representative sequence from each species to draw a phylogenetic tree only on species level for better visualization of their geographic distribution. Here I choose to find the median of the parent node of each species group and choose one sequence with the median parent node number to be the representative sequence.
-
+##using function in order to filter the data
 ```{r}
-COI_treetibble$species <- paste(word(COI_treetibble$label, 2L))
-parent.median <- COI_treetibble %>%
-  group_by(species) %>%
-  summarize(Median = round(median(parent)))
+findRepresentativeSequences <- function(COI_treetibble) {
+  COI_treetibble$species <- paste(word(COI_treetibble$label, 2L))
 
-rep.sequences <- COI_treetibble %>%
-  inner_join(parent.median, by = "species") %>%
-  filter(parent == Median) %>%
-  group_by(species) %>%
-  sample_n(1)
+  parent.median <- COI_treetibble %>%
+    group_by(species) %>%
+    summarize(Median = round(median(parent)))
 
-print(rep.sequences$label)
+  rep.sequences <- COI_treetibble %>%
+    inner_join(parent.median, by = "species") %>%
+    filter(parent == Median) %>%
+    group_by(species) %>%
+    sample_n(1)
+
+  return(rep.sequences$label)
+}
+
+# Assuming COI_treetibble is your data frame
+result <- findRepresentativeSequences(COI_treetibble)
+print(result)
+
 ```
 
 There are 4 species have two sequences match the condition, so I choose the first one of each species as the representative sequence: MT456690.1 capicola, MF381995.1 decaocto, GQ482677.1 orientalis,  KU722518.1 roseogrisea, and GU572103.1 turtur.
@@ -350,6 +349,7 @@ COI_species <- dfCOI_filtered %>%
 ```
 
 DNA sequence alignment of the representative sequences.
+#adding browseseqs in order to see the results for the alignments to make a better decision about them!
 
 ```{r, results='hide', warning=FALSE}
 dfCOI_species <- as.data.frame(COI_species)
@@ -360,6 +360,8 @@ names(dfCOI_species$nucleotides) <- dfCOI_species$Species_Name
 
 dfCOI_species.alignment <- DNAStringSet(muscle::muscle(dfCOI_species$nucleotides, 
                                                maxiters = 2), use.names = TRUE)
+
+BrowseSeqs(dfCOI_species.alignment)
 ```
 
 Draw the dedrogram only on species level.
@@ -395,6 +397,7 @@ dfGBIF_geo <- as.matrix(dfGBIF_geo)
 species.names <- as.vector(dfGBIF_geo[,1])
 rownames(dfGBIF_geo) <- species.names
 
+
 #remove the column of species names
 dfGBIF_geo <- dfGBIF_geo[, -1]
 
@@ -402,7 +405,7 @@ obj <- phylo.to.map(COI_species.tree, dfGBIF_geo, plot=FALSE)
 
 cols<-setNames(sample(rainbow(n=Ntip(COI_species.tree))),
     COI_species.tree$tip.label)
-
+str(dfGBIF_geo)
 plot(obj,colors=cols,ftype="i",fsize=0.5,cex.points=c(0,0.5))
 ```
 
