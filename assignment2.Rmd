@@ -94,8 +94,6 @@ Filter out the species with much shorter sequence lengths than all the majority 
 
 ## now I rewrite your codes related to filterin steps by using function command 
 ```{r, Filterin by using function }
-library(dplyr)
-library(stringr)
 
 processCOIData <- function(dfNCBI_COI) {
   dfCOI_filtered <- dfNCBI_COI %>%
@@ -405,7 +403,7 @@ obj <- phylo.to.map(COI_species.tree, dfGBIF_geo, plot=FALSE)
 
 cols<-setNames(sample(rainbow(n=Ntip(COI_species.tree))),
     COI_species.tree$tip.label)
-str(dfGBIF_geo)
+
 plot(obj,colors=cols,ftype="i",fsize=0.5,cex.points=c(0,0.5))
 ```
 
